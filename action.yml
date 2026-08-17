@@ -1,0 +1,36 @@
+name: "Causal Engine Verify"
+description: "Metered causal verification gate. POSTs Python source to /v1/verify; passes on SETTLED, fails on FAILED or HTTP 402."
+author: "zensteagarden"
+branding:
+  icon: shield
+  color: blue
+inputs:
+  api-key:
+    description: "cek_ API key from POST /v1/accounts/register. Store as a GitHub secret; do not log it."
+    required: true
+  gateway-url:
+    description: "Causal Engine gateway base URL."
+    required: false
+    default: "https://causal-engine-gateway.fly.dev"
+  source-path:
+    description: "Python file to verify. If omitted on a pull_request, the first added/modified .py file vs github.base_ref is used."
+    required: false
+    default: ""
+  test-path:
+    description: "Optional pytest file. If omitted, a parse-only contract is generated (no pathlib; that module is sandbox-banned)."
+    required: false
+    default: ""
+outputs:
+  cycle-status:
+    description: "SETTLED, FAILED, PAYMENT_REQUIRED, or HTTP_ERROR"
+  endpoint-id:
+    description: "64-hex endpoint id when the engine returns one"
+  checkout-url:
+    description: "Stripe Checkout URL when the engine returns HTTP 402"
+  http-status:
+    description: "HTTP status from POST /v1/verify"
+  ast-valid:
+    description: "workload_telemetry.ast_valid when present"
+runs:
+  using: node20
+  main: index.js
