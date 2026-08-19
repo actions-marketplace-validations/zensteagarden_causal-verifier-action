@@ -1,0 +1,30 @@
+name: Tesser Concurrency Test
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: tesser-test-group
+  cancel-in-progress: true
+
+jobs:
+  long-job:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Start marker
+        run: echo "Job started at $(date)" > start.txt
+
+      - name: Simulate work and side-effect
+        run: |
+          echo "Writing side-effect artifact..."
+          echo "side-effect from run $GITHUB_RUN_ID" > side-effect.txt
+          sleep 90
+          echo "Job finished at $(date)" >> start.txt
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tesser-side-effect-${{ github.run_id }}
+          path: |
+            start.txt
+            side-effect.txt
