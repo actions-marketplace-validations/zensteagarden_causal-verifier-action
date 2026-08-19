@@ -2,6 +2,15 @@ name: Tesser Concurrency Test
 
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: 'writer or reader'
+        required: true
+        default: 'writer'
+        type: choice
+        options:
+          - writer
+          - reader
 
 concurrency:
   group: tesser-test-group
@@ -11,23 +20,39 @@ jobs:
   long-job:
     runs-on: ubuntu-latest
     steps:
-      - name: Early side-effect (cache write)
-        uses: actions/cache@v4
-        with:
-          path: residual.txt
-          key: tesser-residual-${{ github.run_id }}
-          restore-keys: tesser-residual-
-
-      - name: Write residual marker immediately
+      - name: Writer - early residual write
+        if: ${{ github.event.inputs.mode == 'writer' || github.event.inputs.mode == '' }}
         run: |
-          echo "Residual from run ${{ github.run_id }} at $(date)" > residual.txt
-          echo "This should be visible if residual state survives cancellation"
+          echo "Residual marker written by run ${{ github.run_id }} at $(date)" > residual.txt
+          echo "STABLE_RESIDUAL_CONTENT" >> residual.txt
+          cat residual.txt
 
-      - name: Simulate long work
-        run: sleep 120
-
-      - name: Upload artifact (late)
-        uses: actions/upload-artifact@v4
+      - name: Writer - save to stable cache key
+        if: ${{ github.event.inputs.mode == 'writer' || github.event.inputs.mode == '' }}
+        uses: actions/cache/save@v4
         with:
-          name: tesser-side-effect-${{ github.run_id }}
           path: residual.txt
+          key: tesser-stable-residual-v1
+
+      - name: Writer - long sleep so it can be cancelled
+        if: ${{ github.event.inputs.mode == 'writer' || github.event.inputs.mode == '' }}
+        run: sleep 90
+
+      - name: Reader - attempt to restore residual from cancelled writer
+        if: ${{ github.event.inputs.mode == 'reader' }}
+        uses: actions/cache/restore@v4
+        id: cache-restore
+        with:
+          path: residual.txt
+          key: tesser-stable-residual-v1
+
+      - name: Reader - show what was restored
+        if: ${{ github.event.inputs.mode == 'reader' }}
+        run: |
+          echo "Cache hit: ${{ steps.cache-restore.outputs.cache-hit }}"
+          if [ -f residual.txt ]; then
+            echo "RESIDUAL FOUND:"
+            cat residual.txt
+          else
+            echo "No residual.txt found - cache miss or cleaned"
+          fi
