@@ -60,6 +60,8 @@ Your coding agent says the code works. This action checks whether it actually pa
 
 The action:
 
+- runs a local, source-private AST preflight over the selected pytest contract
+- rejects high-confidence false-green patterns before source or tests leave the runner
 - reads a Python source file
 - reads a required pytest verification contract
 - calls the metered verification API
@@ -69,6 +71,22 @@ The action:
 - masks `cek_` API keys in logs
 - does not print submitted source or tests by default
 - blocks configured source and test paths from escaping the GitHub workspace
+
+## Contract Assurance Preflight
+
+Ordinary pytest treats a test as passing when it exits without an exception. That means a comparison can run, return `False`, be discarded, and still produce a green check.
+
+Before calling the gateway, Noticer now parses the selected pytest contract locally and fails closed on high-confidence patterns including:
+
+- discarded comparisons such as `actual == expected`
+- discarded Boolean helpers such as `np.allclose(...)`
+- constant-true assertions
+- swallowed exceptions
+- selected contracts containing no test functions
+
+The preflight emits finding codes and line numbers only. It does not print or transmit source while reporting a finding.
+
+`contract-preflight` defaults to `true`. Setting it to `false` is a compatibility escape hatch and removes the assurance that these patterns were checked. Self-hosted runners require Python 3.10 or newer.
 
 ## Accepted Pilot Installation
 
@@ -124,6 +142,7 @@ The immutable Action commit above is the v1.1.0 release. Replace the example pat
 | `source-path` | no | first changed `.py` on PR | Python file to verify. |
 | `test-path` | yes | | Pytest file defining the verification contract. |
 | `require-signed-receipt` | no | `true` | Reject missing, invalid, unknown-key, or revoked-key receipts. |
+| `contract-preflight` | no | `true` | Reject high-confidence false-green pytest patterns locally before gateway submission. |
 | `timeout-seconds` | no | `120` | Client-side request timeout, 5-600 seconds. |
 
 ## Outputs
@@ -143,6 +162,9 @@ The immutable Action commit above is the v1.1.0 release. Replace the example pat
 | `receipt-id` | Content-addressed receipt identifier. |
 | `receipt-url` | Permanent receipt lookup URL. |
 | `receipt-authentication` | Receipt authentication mode. |
+| `preflight-status` | Local verdict: `PASS`, `FAIL`, `SKIPPED`, or `HARNESS_ERROR`. |
+| `preflight-findings` | Count of blocking high-confidence contract findings. |
+| `preflight-codes` | Comma-separated finding codes without source content. |
 
 ## Response Compatibility
 

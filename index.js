@@ -7,6 +7,7 @@ const { verifyReceipt } = require("./verify-receipt");
 
 const DEFAULT_GATEWAY = "https://causal-engine-gateway.fly.dev";
 const DEFAULT_TIMEOUT_SECONDS = 120;
+const CONTRACT_PREFLIGHT_PATH = path.join(__dirname, "contract-preflight.py");
 
 function getInput(name) {
   const upper = String(name).toUpperCase();
@@ -179,6 +180,72 @@ function timeoutSeconds() {
   return n;
 }
 
+function contractPreflightEnabled() {
+  const raw = getInput("contract-preflight").toLowerCase();
+  if (!raw) return true;
+  if (["true", "1", "yes"].includes(raw)) return true;
+  if (["false", "0", "no"].includes(raw)) return false;
+  fail("contract-preflight must be true or false.");
+}
+
+function invokeContractPreflight(test, apiKey) {
+  if (!contractPreflightEnabled()) {
+    setOutput("preflight-status", "SKIPPED");
+    setOutput("preflight-findings", "0");
+    console.log("Contract preflight: SKIPPED by explicit configuration.");
+    return;
+  }
+
+  const preferred = process.env.NOTICER_PYTHON || (process.platform === "win32" ? "python" : "python3");
+  let result = spawnSync(
+    preferred,
+    [CONTRACT_PREFLIGHT_PATH, "--test", test.abs],
+    { encoding: "utf8", cwd: workspaceRoot(), maxBuffer: 1024 * 1024 }
+  );
+  if (result.error && result.error.code === "ENOENT" && preferred !== "python") {
+    result = spawnSync(
+      "python",
+      [CONTRACT_PREFLIGHT_PATH, "--test", test.abs],
+      { encoding: "utf8", cwd: workspaceRoot(), maxBuffer: 1024 * 1024 }
+    );
+  }
+  if (result.error) {
+    setOutput("preflight-status", "HARNESS_ERROR");
+    setOutput("preflight-findings", "0");
+    fail(`Contract preflight could not start: ${result.error.code || result.error.message}`, apiKey);
+  }
+
+  const report = parseJsonSafe(result.stdout);
+  const status = typeof report.status === "string" ? report.status : "HARNESS_ERROR";
+  const findings = Array.isArray(report.findings) ? report.findings : [];
+  setOutput("preflight-status", status);
+  setOutput("preflight-findings", String(findings.length));
+  setOutput(
+    "preflight-codes",
+    [...new Set(findings.map((item) => String(item.code || "UNKNOWN")))].join(",")
+  );
+
+  if (status === "PASS" && result.status === 0) {
+    console.log(`Contract preflight: PASS (${report.test_count || 0} test function(s)).`);
+    return;
+  }
+
+  if (status === "FAIL") {
+    const locations = findings
+      .slice(0, 10)
+      .map((item) => `${item.code || "UNKNOWN"}@${item.line || 0}`)
+      .join(", ");
+    fail(
+      `Contract preflight: FALSE_GREEN risk in ${test.relative}; ` +
+      `${findings.length} blocking finding(s): ${locations}. No source was sent to the gateway.`,
+      apiKey
+    );
+  }
+
+  const reason = typeof report.error === "string" && report.error ? report.error : "invalid preflight response";
+  fail(`Contract preflight: HARNESS_ERROR for ${test.relative}: ${reason}`, apiKey);
+}
+
 async function main() {
   const apiKey = getInput("api-key");
   if (apiKey) {
@@ -215,6 +282,7 @@ async function main() {
 
   const source = resolveWorkspaceFile(sourcePath, "source-path", apiKey);
   const test = resolveWorkspaceFile(testPath, "test-path", apiKey);
+  invokeContractPreflight(test, apiKey);
   const sourceCode = fs.readFileSync(source.abs, "utf8");
   const testCode = fs.readFileSync(test.abs, "utf8");
   const targetName = path.basename(source.relative);

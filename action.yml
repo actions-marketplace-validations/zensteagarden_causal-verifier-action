@@ -23,6 +23,10 @@ inputs:
     description: "Require a valid DSSE/Ed25519 receipt bound to the submitted source and tests."
     required: false
     default: "true"
+  contract-preflight:
+    description: "Reject high-confidence false-green pytest patterns before source or tests are sent to the gateway."
+    required: false
+    default: "true"
   timeout-seconds:
     description: "Client-side timeout for the verification request. Must be 5-600 seconds."
     required: false
@@ -54,6 +58,12 @@ outputs:
     description: "Permanent receipt lookup URL"
   receipt-authentication:
     description: "Receipt authentication mode; DSSE_ED25519 when trusted"
+  preflight-status:
+    description: "Local contract assurance verdict: PASS, FAIL, SKIPPED, or HARNESS_ERROR"
+  preflight-findings:
+    description: "Number of blocking high-confidence contract findings"
+  preflight-codes:
+    description: "Comma-separated false-green finding codes without source content"
 runs:
   using: node24
   main: index.js

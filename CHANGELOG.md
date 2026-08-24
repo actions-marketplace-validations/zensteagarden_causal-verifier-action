@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — Contract assurance preflight
+
+- Add a local Python AST preflight before gateway submission.
+- Reject discarded comparisons, discarded Boolean helpers, constant-true assertions, swallowed exceptions, and contracts with no test functions.
+- Report privacy-safe finding codes and line numbers without printing submitted code.
+- Add frozen false-green, repaired-contract, and nearby-good regression controls.
+- Preserve an explicit compatibility escape hatch while enabling preflight by default.
+
 ## v1.1.0 — Trusted verification records
 
 - Require independently verified DSSE/Ed25519 receipts by default.
