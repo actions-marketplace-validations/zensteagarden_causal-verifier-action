@@ -208,3 +208,41 @@ test("missing test-path is rejected before any request", async (t) => {
   assert.equal(mock.requests.length, 0);
   assert.match(result.stderr, /Missing required input test-path/);
 });
+
+test("contract preflight blocks a discarded comparison before any gateway request", async (t) => {
+  const mock = await startServer();
+  t.after(() => mock.server.close());
+  const workspace = fixture();
+  fs.writeFileSync(
+    path.join(workspace, "test_solution.py"),
+    "from solution import add\n\ndef test_add():\n    add(2, 3) == 5\n"
+  );
+
+  const result = await invoke(workspace, mock.gateway, "cek_fixture_false_green");
+
+  assert.equal(result.code, 1);
+  assert.equal(mock.requests.length, 0);
+  assert.match(result.stderr, /FALSE_GREEN risk/);
+  assert.match(result.stderr, /DISCARDED_COMPARISON@4/);
+  assert.match(result.outputs, /preflight-status<<[^\n]+\nFAIL\n/);
+  assert.match(result.outputs, /preflight-findings<<[^\n]+\n1\n/);
+  assert.doesNotMatch(result.stdout + result.stderr, /add\(2, 3\)/);
+});
+
+test("contract preflight can be explicitly disabled for compatibility", async (t) => {
+  const mock = await startServer();
+  t.after(() => mock.server.close());
+  const workspace = fixture();
+  fs.writeFileSync(
+    path.join(workspace, "test_solution.py"),
+    "from solution import add\n\ndef test_add():\n    add(2, 3) == 5\n"
+  );
+
+  const result = await invoke(workspace, mock.gateway, "cek_fixture_preflight_off", {
+    INPUT_CONTRACT_PREFLIGHT: "false"
+  });
+
+  assert.equal(result.code, 0);
+  assert.equal(mock.requests.length, 1);
+  assert.match(result.outputs, /preflight-status<<[^\n]+\nSKIPPED\n/);
+});

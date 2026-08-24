@@ -1,0 +1,47 @@
+name: Contract assurance false-green proof
+
+on:
+  pull_request:
+    paths:
+      - "contract-preflight.py"
+      - "index.js"
+      - "action.yml"
+      - "proof/contract-assurance/**"
+      - "test/contract-preflight.test.js"
+      - "test/fixtures/contract-preflight/**"
+      - ".github/workflows/contract-assurance-proof.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  prove-discrimination:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install proof dependency
+        run: python -m pip install pytest
+      - name: Establish ordinary pytest false green
+        working-directory: proof/contract-assurance/bad
+        run: python -m pytest -q test_dead.py
+      - name: Require Noticer to block the discarded comparison
+        run: |
+          set +e
+          python contract-preflight.py --test proof/contract-assurance/bad/test_dead.py
+          code=$?
+          set -e
+          test "$code" -eq 3
+      - name: Require the binding contract to reject wrong output
+        working-directory: proof/contract-assurance/bad
+        run: |
+          if python -m pytest -q test_armed.py; then
+            echo "Expected the armed contract to reject wrong output."
+            exit 1
+          fi
+      - name: Require the same binding contract to accept nearby-good output
+        working-directory: proof/contract-assurance/good
+        run: python -m pytest -q test_armed.py

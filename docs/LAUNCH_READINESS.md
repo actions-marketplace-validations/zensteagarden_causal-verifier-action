@@ -1,9 +1,11 @@
 # MVP Launch Readiness
 
-Updated: 2026-08-18
+Updated: 2026-08-24
 
 ## Completed
 
+- Local contract assurance preflight blocks high-confidence false-green pytest patterns before gateway submission
+- Frozen discarded-comparison, repaired-contract, and nearby-good controls
 - Production GitHub Action released as `zensteagarden/causal-verifier-action@v1`
 - Immutable `v1.0.0` release published
 - Node 24 runtime and CI migration
